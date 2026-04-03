@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using Caliburn.Micro;
@@ -28,8 +28,13 @@ public class ProfileViewModel : Screen
 
     public Profile Profile { get; }
     public Action<Guid> ProfileRemoved { get; set; } = null!;
+    public Action<ProfileViewModel>? SetHotkeyRequested { get; set; }
+    public Action<ProfileViewModel>? ClearHotkeyRequested { get; set; }
     public string Name => Profile.Name;
     public Guid Guid { get; set; }
+
+    public string HotkeyDisplayName => Profile.Hotkey?.DisplayName ?? string.Empty;
+    public bool HasHotkey => Profile.Hotkey is not null;
 
     public ProfileSettingViewModel? ProfileSettings
     {
@@ -87,7 +92,7 @@ public class ProfileViewModel : Screen
     private void BuildProfileSettings()
     {
         ProfileSettings = _profileSettingViewModelFactory
-            .Create(Profile.ProfileSetting, Profile.IsDefault, Profile);
+            .Create(Profile.ProfileSetting, Profile.IsDefault);
     }
 
     public void IsUpdated()
@@ -97,21 +102,49 @@ public class ProfileViewModel : Screen
 
     private void CreateContextMenu()
     {
-        if (Profile.IsDefault)
-            return;
-
         ContextMenu = new ContextMenu();
-        var menuItem1 = new MenuItem
+
+        var setHotkeyItem = new MenuItem { Header = "Set Hotkey..." };
+        setHotkeyItem.Click += OnSetHotkeyClicked;
+        ContextMenu.Items.Add(setHotkeyItem);
+
+        if (HasHotkey)
         {
-            Header = "Remove"
-        };
-        menuItem1.Click += OnRemoveClicked;
-        ContextMenu.Items.Add(menuItem1);
+            var clearHotkeyItem = new MenuItem { Header = "Clear Hotkey" };
+            clearHotkeyItem.Click += OnClearHotkeyClicked;
+            ContextMenu.Items.Add(clearHotkeyItem);
+        }
+
+        if (!Profile.IsDefault)
+        {
+            ContextMenu.Items.Add(new Separator());
+            var removeItem = new MenuItem { Header = "Remove" };
+            removeItem.Click += OnRemoveClicked;
+            ContextMenu.Items.Add(removeItem);
+        }
+    }
+
+    private void OnSetHotkeyClicked(object sender, RoutedEventArgs e)
+    {
+        SetHotkeyRequested?.Invoke(this);
+    }
+
+    private void OnClearHotkeyClicked(object sender, RoutedEventArgs e)
+    {
+        ClearHotkeyRequested?.Invoke(this);
     }
 
     private void OnRemoveClicked(object sender, RoutedEventArgs e)
     {
         ProfileRemoved.Invoke(Guid);
+    }
+
+    public void RefreshHotkey()
+    {
+        NotifyOfPropertyChange(nameof(HotkeyDisplayName));
+        NotifyOfPropertyChange(nameof(HasHotkey));
+        CreateContextMenu();
+        NotifyOfPropertyChange(nameof(ContextMenu));
     }
 
     public void Deactivate()

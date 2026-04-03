@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
 using FluentResults;
 using Newtonsoft.Json;
 using NvidiaDisplayController.Objects;
@@ -10,21 +9,16 @@ namespace NvidiaDisplayController.Global.Controllers;
 
 public class DataController
 {
-    private static readonly string _location = Assembly.GetExecutingAssembly().Location;
-    private static readonly string? _directory = Path.GetDirectoryName(_location);
+    private static readonly string _directory = AppContext.BaseDirectory;
 
-    public string DataPath
-    {
-        get
-        {
-            if (_directory != null)
-                return Path.Combine(_directory, @"Data\Data.json");
-            throw new Exception();
-        }
-    }
+    public string DataPath => Path.Combine(_directory, @"Data\Data.json");
 
     public void Write(Computer data)
     {
+        var directory = Path.GetDirectoryName(DataPath)!;
+        if (!Directory.Exists(directory))
+            Directory.CreateDirectory(directory);
+
         var serializeObject = JsonConvert.SerializeObject(data, new JsonSerializerSettings
         {
             PreserveReferencesHandling = PreserveReferencesHandling.Objects
@@ -35,6 +29,13 @@ public class DataController
 
     public Result<Computer> Load()
     {
+        if (!File.Exists(DataPath))
+        {
+            var computer = new Computer();
+            Write(computer);
+            return Result.Ok(computer);
+        }
+
         using StreamReader reader = new(DataPath);
         {
             var json = reader.ReadToEnd();

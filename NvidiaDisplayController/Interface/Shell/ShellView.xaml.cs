@@ -1,23 +1,27 @@
-﻿using System;
+using System;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Interop;
 using Caliburn.Micro;
 using Ninject;
+using NLog;
 using NvidiaDisplayController.Global;
 using NvidiaDisplayController.Global.Controllers;
 using NvidiaDisplayController.Global.Extensions;
 using Application = System.Windows.Application;
-using System.Windows.Interop;
-using System.Windows.Input;
 
 namespace NvidiaDisplayController.Interface.Shell;
 
 public partial class ShellView
 {
+    private const int WmHotkey = 0x0312;
+
     private NotifyIcon? _notifyIcon;
+    private HwndSource? _hwndSource;
 
     public ShellView()
     {
@@ -26,15 +30,7 @@ public partial class ShellView
     }
 
     [Inject] public DataController DataController { get; set; } = null!;
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        // add message handler to listen for messages from other instances of the app
-        HwndSource source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
-        source.AddHook(WndProc);
-    }
+    [Inject] public ILogger Logger { get; set; } = null!;
 
     private void Start()
     {
@@ -43,16 +39,66 @@ public partial class ShellView
         CreateSystemTrayIcon();
 
         GlobalEvents.UpdateToolTip += OnUpdateToolTip;
+        GlobalEvents.ReRegisterHotkeys += OnReRegisterHotkeys;
+
+        SourceInitialized += OnSourceInitialized;
+        Closed += OnClosed;
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var helper = new WindowInteropHelper(this);
+        _hwndSource = HwndSource.FromHwnd(helper.Handle);
+        _hwndSource?.AddHook(WndProc);
+
+        RegisterAllHotkeys();
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        if (_hwndSource is null)
+            return;
+
+        HotkeyController.UnregisterAll(_hwndSource.Handle);
+        _hwndSource.RemoveHook(WndProc);
+    }
+
+    private void RegisterAllHotkeys()
+    {
+        if (_hwndSource is null)
+            return;
+
+        DataController.Load()
+            .IfSuccess(computer =>
+            {
+                var allProfiles = computer!.Monitors.SelectMany(m => m.Profiles);
+                HotkeyController.RegisterAll(_hwndSource.Handle, allProfiles, Logger);
+            });
+    }
+
+    private void OnReRegisterHotkeys()
+    {
+        if (_hwndSource is null)
+            return;
+
+        DataController.Load()
+            .IfSuccess(computer =>
+            {
+                var allProfiles = computer!.Monitors.SelectMany(m => m.Profiles);
+                HotkeyController.ReRegisterAll(_hwndSource.Handle, allProfiles, Logger);
+            });
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        // listen for the custom message and show the window contents
-        if (msg == 0x0400 + 1) // WM_SHOWME
+        if (msg == WmHotkey && HotkeyController.TryGetHotkey(wParam, out var modifiers, out var virtualKey))
         {
-            DoShow();
+            if (DataContext is ShellViewModel viewModel)
+                viewModel.ApplyProfileByHotkey(modifiers, virtualKey);
+
             handled = true;
         }
+
         return IntPtr.Zero;
     }
 
@@ -64,13 +110,9 @@ public partial class ShellView
     private void CreateSystemTrayIcon()
     {
         _notifyIcon = new NotifyIcon();
-        _notifyIcon.Icon = new Icon("Resources/desktop.ico");
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "desktop.ico");
+        _notifyIcon.Icon = new Icon(iconPath);
         _notifyIcon.Visible = true;
-
-        // show the window when left clicking the tray icon
-        _notifyIcon.MouseClick += (s, e) => { 
-            if (e.Button == MouseButtons.Left) DoShow(); 
-        };
 
         _notifyIcon.ContextMenuStrip = new ContextMenuStrip();
         _notifyIcon.ContextMenuStrip.Items.Add("Show", null, OpenEvent);
@@ -107,19 +149,10 @@ public partial class ShellView
         DoShow();
     }
 
-    public void DoShow()
+    private void DoShow()
     {
         Show();
         WindowState = WindowState.Normal;
-
-        // ensure to focus the window so that it brings it to the front
-        Activate();
-        Focus();
-
-        // toggle topmost to bring it to the front above all other windows
-        // then disable so it behaves normally
-        Topmost = true;
-        Topmost = false;
     }
 
     protected override void OnStateChanged(EventArgs e)

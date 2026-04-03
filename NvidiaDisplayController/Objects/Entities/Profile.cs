@@ -1,6 +1,4 @@
-﻿using System.Windows.Input;
-
-namespace NvidiaDisplayController.Objects.Entities;
+﻿namespace NvidiaDisplayController.Objects.Entities;
 
 public class Profile
 {
@@ -19,8 +17,5 @@ public class Profile
     public ProfileSetting ProfileSetting { get; }
     public bool IsActive { get; set; }
     public bool IsDefault { get; set; }
-    
-    // Hotkey properties
-    public ModifierKeys? HotkeyModifiers { get; set; }
-    public Key? HotkeyKey { get; set; }
+    public HotkeyBinding? Hotkey { get; set; }
 }

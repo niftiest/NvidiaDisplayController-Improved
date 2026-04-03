@@ -1,11 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Interop;
 using Caliburn.Micro;
 using NLog;
 using NvAPIWrapper.Display;
@@ -19,8 +17,6 @@ using NvidiaDisplayController.Objects.Entities;
 using NvidiaDisplayController.Objects.Factories;
 using NvidiaDisplayController.Objects.Factories.Interfaces;
 using NvidiaDisplayController.Objects.HandleEvents;
-using System.Windows.Input;
-using NHotkey.Wpf;
 using Monitor = NvidiaDisplayController.Objects.Entities.Monitor;
 
 namespace NvidiaDisplayController.Interface.Shell;
@@ -45,8 +41,6 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     private MonitorViewModel? _selectedMonitor;
     private Display? _selectedNvidiaMonitor;
     private ProfileViewModel? _selectedProfile;
-    private HotkeyManager? _hotkeyManager;
-    private readonly Dictionary<int, ProfileViewModel> _hotkeyToProfile = new();
 
     public ShellViewModel(
         IEventAggregator eventAggregator,
@@ -118,6 +112,7 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
             _selectedProfile = value;
             NotifyOfPropertyChange();
             NotifyOfPropertyChange(nameof(CanApply));
+            NotifyOfPropertyChange(nameof(CanSetHotkey));
         }
     }
 
@@ -134,6 +129,7 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     }
 
     public bool CanApply => SelectedProfile?.ProfileSettings != null;
+    public bool CanSetHotkey => SelectedProfile is not null;
     public bool CanAddProfile => SelectedMonitor is not null && SelectedMonitor.Profiles.Count < 5;
 
     public bool IsStartWithWindows
@@ -265,9 +261,68 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     {
         profileViewModel.IsSelectedChanged += OnProfileViewModelSelectedChanged;
         profileViewModel.ProfileRemoved += OnProfileRemoved;
-        
-        // Register hotkey when profile is created/loaded
-        RegisterProfileHotkey(profileViewModel);
+        profileViewModel.SetHotkeyRequested += OnSetHotkeyRequested;
+        profileViewModel.ClearHotkeyRequested += OnClearHotkeyRequested;
+    }
+
+    private void OnSetHotkeyRequested(ProfileViewModel profileViewModel)
+    {
+        _nvidiaDisplayWindowManager
+            .OpenHotkeyCaptureDialog()
+            .IfSuccess(hotkeyBinding =>
+            {
+                if (hotkeyBinding is null)
+                {
+                    profileViewModel.Profile.Hotkey = null;
+                    profileViewModel.RefreshHotkey();
+                    Write();
+                    GlobalEvents.ReRegisterHotkeys?.Invoke();
+                    return;
+                }
+
+                var conflict = FindHotkeyConflict(hotkeyBinding, profileViewModel.Profile);
+                if (conflict is not null)
+                {
+                    var monitorName = conflict.Monitor.Name;
+                    _nvidiaDisplayWindowManager.ShowMessageBox(
+                        $"Hotkey {hotkeyBinding.DisplayName} is already assigned to profile '{conflict.Name}' on monitor '{monitorName}'.");
+                    return;
+                }
+
+                profileViewModel.Profile.Hotkey = hotkeyBinding;
+                profileViewModel.RefreshHotkey();
+                Write();
+                GlobalEvents.ReRegisterHotkeys?.Invoke();
+            });
+    }
+
+    private void OnClearHotkeyRequested(ProfileViewModel profileViewModel)
+    {
+        profileViewModel.Profile.Hotkey = null;
+        profileViewModel.RefreshHotkey();
+        Write();
+        GlobalEvents.ReRegisterHotkeys?.Invoke();
+    }
+
+    private Profile? FindHotkeyConflict(HotkeyBinding hotkey, Profile excludeProfile)
+    {
+        foreach (var monitor in Computer.Monitors)
+        {
+            foreach (var profile in monitor.Profiles)
+            {
+                if (profile == excludeProfile)
+                    continue;
+
+                if (profile.Hotkey is not null &&
+                    profile.Hotkey.Modifiers == hotkey.Modifiers &&
+                    profile.Hotkey.VirtualKey == hotkey.VirtualKey)
+                {
+                    return profile;
+                }
+            }
+        }
+
+        return null;
     }
 
     private void OnProfileViewModelSelectedChanged(Guid guid, bool value)
@@ -292,9 +347,6 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     {
         var profileViewModel = SelectedMonitor!.Profiles.Single(p => p.Guid == guid);
 
-        // Unregister hotkey before removing profile
-        UnregisterProfileHotkey(profileViewModel);
-
         SelectedMonitor.Monitor.Profiles.Remove(profileViewModel.Profile);
         SelectedMonitor?.Profiles.Remove(profileViewModel);
 
@@ -302,6 +354,7 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
         NotifyOfPropertyChange(nameof(ProfileGroupBoxText));
 
         Write();
+        GlobalEvents.ReRegisterHotkeys?.Invoke();
     }
 
     private void Write()
@@ -311,9 +364,9 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
 
     private void OnMonitorViewModelIsSelectedChanged(bool isSelected, Guid selectedMonitor)
     {
-        if (SelectedMonitor != null) 
+        if (SelectedMonitor != null)
             SelectedMonitor.IsSelected = false;
-        
+
         SelectedMonitor = isSelected ? Monitors.Single(m => m.Guid == selectedMonitor) : null;
         SelectedNvidiaMonitor = _nvidiaDisplays?.SingleOrDefault(d => d.Name == SelectedMonitor?.ScreenName);
 
@@ -381,9 +434,14 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
 
         SelectedProfile!.IsUpdated();
         ProfileSettingsIsDirty = false;
-        
-        // Re-register hotkey in case it changed
-        ReregisterProfileHotkey(SelectedProfile);
+    }
+
+    public void SetHotkey()
+    {
+        if (SelectedProfile is null)
+            return;
+
+        OnSetHotkeyRequested(SelectedProfile);
     }
 
     public void OpenHelp()
@@ -396,104 +454,51 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
         _nvidiaDisplayWindowManager.OpenWebsite(PaypalLink);
     }
 
-    protected override void OnViewLoaded(object view)
+    public void ApplyProfileByHotkey(uint modifiers, uint virtualKey)
     {
-        base.OnViewLoaded(view);
-        InitializeHotkeyManager(view);
-    }
+        ProfileViewModel? profileViewModel = null;
+        MonitorViewModel? monitorViewModel = null;
 
-    private void InitializeHotkeyManager(object view)
-    {
-        if (view is Window window)
+        foreach (var monitor in Monitors)
         {
-            var helper = new WindowInteropHelper(window);
-            _hotkeyManager = HotkeyManager.Current;
-            
-            // Register hotkeys for all existing profiles
-            foreach (var monitor in Monitors)
+            foreach (var p in monitor.Profiles)
             {
-                foreach (var profile in monitor.Profiles)
+                if (p.Profile.Hotkey is not null &&
+                    p.Profile.Hotkey.Modifiers == modifiers &&
+                    p.Profile.Hotkey.VirtualKey == virtualKey)
                 {
-                    RegisterProfileHotkey(profile);
+                    profileViewModel = p;
+                    monitorViewModel = monitor;
+                    break;
                 }
             }
+
+            if (profileViewModel is not null)
+                break;
         }
-    }
 
-    private void RegisterProfileHotkey(ProfileViewModel profileViewModel)
-    {
-        if (profileViewModel.Profile.HotkeyModifiers.HasValue && 
-            profileViewModel.Profile.HotkeyKey.HasValue &&
-            _hotkeyManager != null)
-        {
-            try
-            {
-                var keyGesture = new KeyGesture(
-                    profileViewModel.Profile.HotkeyKey.Value,
-                    profileViewModel.Profile.HotkeyModifiers.Value);
-                
-                string hotkeyID = profileViewModel.Guid.ToString();
-                _hotkeyManager.AddOrReplace(
-                    profileViewModel.Name, 
-                    keyGesture, 
-                    (s, e) => ActivateProfile(profileViewModel)); 
+        if (profileViewModel is null || monitorViewModel is null)
+            return;
 
-                _hotkeyToProfile[profileViewModel.Guid.ToString().GetHashCode()] = profileViewModel;
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn($"Failed to register hotkey for profile: {profileViewModel.Name}. Error: {ex.Message}");
-            }
-        }
-    }
+        // If the requested profile is already active, toggle back to the default (first) profile
+        if (profileViewModel.IsActive && !profileViewModel.IsDefault && monitorViewModel.Profiles.Count > 0)
+            profileViewModel = monitorViewModel.Profiles[0];
 
-    private void UnregisterProfileHotkey(ProfileViewModel profileViewModel)
-    {
-        if (_hotkeyManager != null)
-        {
-            _hotkeyManager.Remove(profileViewModel.Guid.ToString());
-            
-            var hashCode = profileViewModel.Guid.ToString().GetHashCode();
-            _hotkeyToProfile.Remove(hashCode);
-        }
-    }
+        var nvidiaDisplay = _nvidiaDisplays?.SingleOrDefault(d => d.Name == monitorViewModel.ScreenName);
 
-    private void ReregisterProfileHotkey(ProfileViewModel profileViewModel)
-    {
-        UnregisterProfileHotkey(profileViewModel);
-        RegisterProfileHotkey(profileViewModel);
-    }
+        // Use the entity's ProfileSetting directly — the ViewModel's ProfileSettings
+        // may be null if this profile isn't currently selected in the UI
+        _displayController.UpdateColorSettings(
+            monitorViewModel.Display,
+            profileViewModel.Profile.ProfileSetting,
+            nvidiaDisplay);
 
-    private void ActivateProfile(ProfileViewModel profileViewModel)
-    {
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            try
-            {
-                var monitor = Monitors.FirstOrDefault(m => m.Profiles.Contains(profileViewModel));
-                if (monitor != null)
-                {
-                    var nvidiaDisplay = _nvidiaDisplays?.SingleOrDefault(d => d.Name == monitor.ScreenName);
-                    
-                    _displayController.UpdateColorSettings(
-                        monitor.Display,
-                        profileViewModel.Profile.ProfileSetting, 
-                        nvidiaDisplay);
+        // Update active state for this monitor's profiles
+        profileViewModel.IsActive = true;
+        foreach (var p in monitorViewModel.Profiles.Where(p => p != profileViewModel))
+            p.Deactivate();
 
-                    profileViewModel.IsActive = true;
-                    foreach (var otherProfile in monitor.Profiles.Where(p => p.Guid != profileViewModel.Guid))
-                    {
-                        otherProfile.Deactivate();
-                    }
-
-                    Write(); // Save the state
-                    GlobalEvents.UpdateToolTip.Invoke();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Error activating profile via hotkey");
-            }
-        });
+        Write();
+        GlobalEvents.UpdateToolTip.Invoke();
     }
 }

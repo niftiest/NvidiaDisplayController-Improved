@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="NvidiaDisplayController.Interface.Profiles.ProfileView"
+<UserControl x:Class="NvidiaDisplayController.Interface.Profiles.ProfileView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -25,6 +25,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <TextBlock
                     Text="{Binding Name}"
@@ -40,6 +41,15 @@
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
                     Kind="Star" />
+                <TextBlock
+                    Grid.Row="2"
+                    Text="{Binding HotkeyDisplayName}"
+                    Visibility="{calcBinding:Binding HasHotkey}"
+                    FontSize="9"
+                    FontWeight="Normal"
+                    Foreground="White"
+                    HorizontalAlignment="Center"
+                    Margin="0,0,0,2" />
             </Grid>
         </ToggleButton>
     </Border>

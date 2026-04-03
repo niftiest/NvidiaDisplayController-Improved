@@ -10,9 +10,8 @@
     xmlns:mah="http://metro.mahapps.com/winfx/xaml/controls"
     xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
     mc:Ignorable="d"
-    MinHeight="580"
+    Height="580"
     Width="600"
-    SizeToContent="Height"
     WindowStartupLocation="CenterScreen"
     WindowStyle="ToolWindow"
     ResizeMode="CanMinimize"
@@ -23,49 +22,12 @@
     RightWindowCommandsOverlayBehavior="Never"
     GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
     d:DataContext="{d:DesignInstance shell:ShellViewModel}">
-    <mah:MetroWindow.RightWindowCommands>
-        <mah:WindowCommands>
-            <StackPanel
-                Orientation="Horizontal">
-                <Button
-                    ToolTip="About"
-                    cm:Message.Attach="OpenHelp">
-                    <Button.ContentTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <iconPacks:PackIconModern
-                                    Width="22"
-                                    Height="22"
-                                    VerticalAlignment="Center"
-                                    Kind="PageQuestion" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </Button.ContentTemplate>
-                </Button>
-                <Button
-                    ToolTip="Donate"
-                    cm:Message.Attach="OpenDonation">
-                    <Button.ContentTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <iconPacks:PackIconModern
-                                    Width="22"
-                                    Height="22"
-                                    VerticalAlignment="Center"
-                                    Kind="Money" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </Button.ContentTemplate>
-                </Button>
-            </StackPanel>
-        </mah:WindowCommands>
-    </mah:MetroWindow.RightWindowCommands>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" MinHeight="130" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="175" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel
@@ -186,6 +148,7 @@
                 <ColumnDefinition />
                 <ColumnDefinition />
                 <ColumnDefinition />
+                <ColumnDefinition />
             </Grid.ColumnDefinitions>
             <Button
                 Name="Apply"
@@ -211,6 +174,14 @@
                 Grid.Column="2"
                 Margin="5"
                 Content="Revert" />
+            <Button
+                Name="SetHotkey"
+                IsEnabled="{Binding CanSetHotkey}"
+                Style="{DynamicResource DarkThemeButtonStyle}"
+                Grid.Column="3"
+                Width="75"
+                Margin="5"
+                Content="Set Hotkey" />
         </Grid>
     </Grid>
 </mah:MetroWindow>

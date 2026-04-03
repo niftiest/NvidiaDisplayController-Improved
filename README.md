@@ -1,44 +1,72 @@
 
-# NVIDIA Display Controller
+# NVIDIA Display Controller - Improved
 
-This is only for NVIDIA GPU's. Allows you to change display settings and easily switch between different profiles without having to manually adjust settings each time. Applies to the monitor and not a specific program.
+A fork of [Mario Laurianti's NvidiaDisplayController](https://github.com/therealmariolaurianti/NvidiaDisplayController) with additional features and fixes. The original project is no longer functional with current NVIDIA drivers — this fork restores compatibility and adds new capabilities.
 
+> **Original Author:** [Mario Laurianti](https://github.com/therealmariolaurianti) — MIT License
+>
+> **Fork Maintainer:** [NiftiestPixel](https://github.com/niftiest)
 
+## What's New in This Fork
 
+### Custom Global Hotkeys
+- Assign any key combination (Ctrl/Alt/Shift + key) to profiles via right-click context menu
+- Hotkeys work globally — no need to have the app focused
+- Toggle behavior: press hotkey to activate profile, press again to return to default
+- Conflict detection prevents duplicate bindings across profiles
+- Hotkey labels displayed on profile buttons
 
+### System Tray Integration
+- Runs minimized to system tray
+- Tooltip shows active profile for each monitor
+- Right-click context menu (Show / Exit)
+- Left-click tray icon to restore window
 
+### UI and Usability Improvements
+- Profile right-click context menu (Set Hotkey, Clear Hotkey, Remove)
+- Revert button to undo unsaved profile changes
+- Help/About dialog with reset functionality
+- "Start With Windows" option via registry integration
+- Improved multi-monitor handling and profile isolation
 
 ## Features
 
-- Adjust the brightness, contrast, gamma, and digital vibrance settings to your preference.
-- Automatically detects all displays connected to the computer and creates a base default profile for each.
-- Configure settings for up to five profiles for each monitor to easily switch between different configurations.
-- Set a profile as the default so no need to select each time. Optionally, set the default profiles to apply to all monitors on start across all displays.
-- Minimizes to system tray to avoid clutter on taskbar. Right click icon to open/close application once minimized.
-- View selected profiles when hoving mouse over icon in taskbar.
-- Extremely lightweight with low resource use (under 100 MB)
-
+- Adjust brightness, contrast, gamma, and digital vibrance per monitor
+- Automatic detection of all connected NVIDIA displays
+- Up to 5 profiles per monitor with easy switching
+- Apply default profiles automatically on startup
+- Lightweight (under 100 MB)
 
 ## Requirements
 
 - NVIDIA GPU (with installed drivers)
-- Windows (tested with 10/11)
-
+- Windows 10 / 11
 
 ## How to Use
 
-Run the executable and select a monitor from the collection at the top. To create a profile hit the green plus symbol in the Profile section. From there you name the Profile and proceed to set the settings in the Detail section. 
+1. Download the latest release from the [Releases](https://github.com/niftiest/NvidiaDisplayController-Improved/releases) page
+2. Extract and run `NvidiaDisplayController.exe`
+3. Select a monitor from the top, create profiles with the green **+** button
+4. Adjust settings (Brightness, Contrast, Gamma, Digital Vibrance) and click **Apply**
+5. Right-click a profile to assign a global hotkey
 
-Settings will not be applied until the 'Apply' button is pressed at the bottom. To update the settings of a profile WITHOUT applying them to the monitor click the 'Update' button. To revert changes made before applying hit the 'Revert' button.
+Data is stored alongside the executable in `Data\Data.json`. Use the Help button to reset if needed.
 
-All the data is stored where the executable resides (\InstallLocation\Data\Data.json). If you need to reset the data, there is a help button at the top where you can do that.
+## Building from Source
 
+Requires .NET 7 SDK with Windows Desktop workload:
 
+```
+dotnet build NvidiaDisplayController.sln
+```
 
-## Screenshot
+## Credits
 
-![App Screenshot](https://github.com/therealmariolaurianti/NvidiaDisplayController/assets/25336894/8be460e9-f572-498b-99fe-89fe6a8a722d/468x300?text=App+Screenshot+Here)
+- **Mario Laurianti** — Original [NvidiaDisplayController](https://github.com/therealmariolaurianti/NvidiaDisplayController)
+- **[MahApps.Metro](https://mahapps.com/)** — UI framework
+- **[WindowsDisplayAPI](https://github.com/falahati/WindowsDisplayAPI)** — Display management library
+- **[Freepik](https://www.flaticon.com/free-icons/computer)** — Application icon
 
-![App Screenshot](https://github.com/therealmariolaurianti/NvidiaDisplayController/assets/25336894/cc1304d0-23fb-452f-8c91-10f87f412800/468x300?text=App+Screenshot+Here)
+## License
 
-
+[MIT License](LICENSE) — Copyright (c) 2023 Mario Laurianti
