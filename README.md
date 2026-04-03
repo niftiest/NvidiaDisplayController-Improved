@@ -29,6 +29,10 @@ A fork of [Mario Laurianti's NvidiaDisplayController](https://github.com/thereal
 - "Start With Windows" option via registry integration
 - Improved multi-monitor handling and profile isolation
 
+## Screenshot
+
+![App Screenshot](docs/screenshot.png)
+
 ## Features
 
 - Adjust brightness, contrast, gamma, and digital vibrance per monitor
